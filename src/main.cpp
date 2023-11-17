@@ -1,44 +1,49 @@
 #include "M5Atom.h"
 #include <BleKeyboard.h>
 #include <FastLED.h>
+#include <Ticker.h>
 
-static const int buttonPin = 32; // Grove ボタン
-static const int ledPin = 26;    // Grove LED
+static const gpio_num_t groveKeyPin = GPIO_NUM_32;   // Grove Button
+static const gpio_num_t groveLedPin = GPIO_NUM_26;  // Grove LED
+static const gpio_num_t buttonPin = GPIO_NUM_39;
+static const int SecondsToSuspend = 180;
 
-BleKeyboard bleKeyboard("M5ATOM Presenter");
+static BleKeyboard bleKeyboard("M5ATOM Presenter");
+static CRGB leds[1]; // LED, 1 light
+static Ticker watcher;
+static int seconds = 0;
 
-enum Color
-{
-    Yellow = 0xffff00,
-    Red    = 0xff0000,
-    Blue   = 0x0000ff,
-    Green  = 0x00ff00,
-    Black  = 0x000000
-};
-
-CRGB leds[1]; // LED、1灯
-
-void showState(Color color);
 void InputKey(char key);
 void Proc();
 void WaitingForConnection();
+void ShowState(CRGB color);
+void Watch();
 
-// 初期化
 void setup()
 {
     M5.begin(false, false, true);
 
-    pinMode(buttonPin, INPUT_PULLUP);
-    leds[0] = CRGB::Red;
-    FastLED.addLeds<WS2812, 26, GRB>(leds, 1);
-    FastLED.setBrightness(20);
+    watcher.attach(1, Watch);
 
+    pinMode(buttonPin, INPUT_PULLUP);
+    pinMode(groveKeyPin, INPUT_PULLUP);
+
+    ShowState(CRGB::Red);
+    leds[0] = CRGB::Red;
+    FastLED.addLeds<WS2812, groveLedPin, GRB>(leds, 1);
+    FastLED.setBrightness(10);
+
+    // Setting to wake up sleep when Button A and Grove Key are pressed
+    esp_sleep_enable_ext0_wakeup(buttonPin, LOW);
+    esp_sleep_enable_ext1_wakeup(
+        (uint64_t)1U<<((uint64_t)groveKeyPin),
+        ESP_EXT1_WAKEUP_ALL_LOW);
+ 
     bleKeyboard.begin();
 
     WaitingForConnection();
 }
 
-// メインループ
 void loop()
 {
     M5.update();
@@ -48,13 +53,11 @@ void loop()
     delay(10);
 }
 
-// ステート表示
-void showState(Color color)
+void ShowState(CRGB color)
 {
     M5.dis.drawpix(0, color);
 }
 
-// キー入力
 void InputKey(char key)
 {
     bleKeyboard.press(key);
@@ -62,33 +65,30 @@ void InputKey(char key)
     bleKeyboard.releaseAll();
 }
 
-// BLE接続待ち
 void WaitingForConnection()
 {
     bool b = true;
     while(!bleKeyboard.isConnected())
     {
-        showState(b ? Color::Red : Color::Black);
+        ShowState(b ? CRGB::Red : CRGB::Black);
         b = !b;
         delay(500); 
     }
 
-    showState(Color::Blue);
+    ShowState(CRGB::Blue);
     leds[0] = CRGB::Green;
 
     bleKeyboard.releaseAll();
 }
 
-bool blestate = true;
 bool pressed = false;
 
-// 処理本体
 void Proc()
 {
     if(!bleKeyboard.isConnected())
         WaitingForConnection();
 
-    bool press = digitalRead(buttonPin) == LOW;
+    bool press = digitalRead(groveKeyPin) == LOW;
 
     if(pressed != press)
     {
@@ -96,17 +96,39 @@ void Proc()
 
         static const struct KEY
         {
-            Color color;
+            CRGB color;
             char key;
         } keys[] =
         {
-            { Green,  'e' },
-            { Yellow, 'b' },
+            { CRGB::Green,  'e' },
+            { CRGB::Yellow, 'b' },
         };
 
         const KEY& key = keys[press ? 0 : 1];
 
         leds[0] = key.color;
         InputKey(key.key);
+        
+        seconds = 0;
     }
+}
+
+void Watch()
+{
+    seconds++;
+
+    if(seconds< SecondsToSuspend)
+        return;
+
+    // Ready for sleep.
+    bleKeyboard.releaseAll();
+
+    ShowState(CRGB::OrangeRed);
+    leds[0] = CRGB::Black;
+
+    M5.update();
+    delay(200);
+
+    // Enter deep sleep, restarted on resume.
+    esp_deep_sleep_start();
 }
