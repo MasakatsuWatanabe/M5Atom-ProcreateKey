@@ -3,12 +3,11 @@
 Procreate用のBLE 1ボタン外部キーボードを作成するプロジェクトです。
 お使いのiPadでBluetooth M5ATOM Presenterをペアリングして使用してください。
 
-ボタンを押している間は消しゴム機能が、ボタンを放している間はブラシ機能が有効になります。
+ボタンを押している間は消しゴム機能が、放している間はブラシ機能が有効になります。
 180秒間の無操作でディープスリープに入ります。スリープ時はボタンでレジューム（正確には再起動）します。
 
 ## 使用するハードウェア
 
-以下のハードを使用します。
 - **M5Atom Lite**: ESP32ベースの開発キット。詳細は[M5Stack公式ストア](https://shop.m5stack.com/products/atom-lite-esp32-development-kit)を参照。
 - **Mechanical Key Button Unit (SKU: U144)**: 物理ボタンユニット。詳細は[M5Stack公式ストア](https://shop.m5stack.com/products/mechanical-key-button-unit)を参照。
 
